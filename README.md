@@ -1,68 +1,111 @@
 # mcp-focus
 
-A TypeScript stdio proxy that sits between Claude Code (or any MCP client) and your upstream MCP servers, giving you live control over which tools Claude sees — without restarting Claude Code or editing config files.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+[![GitHub issues](https://img.shields.io/github/issues/quasarmagnus/mcp-focus)](https://github.com/quasarmagnus/mcp-focus/issues)
 
-**Three capabilities no existing tool has together:**
+> **Tags:** `mcp` `mcp-proxy` `model-context-protocol` `tool-filtering` `claude-code` `cursor` `codex` `antigravity` `tui` `hot-reload`
 
-1. **Hot reload** — edit `.mcp-focus.json`, Claude re-queries tools within ~300ms
-2. **Interactive TUI** — `mcp-focus` launches a keyboard-driven panel in your terminal
-3. **Three-state visibility** — `enabled` (full), `disabled` (stub shown, ~20 tokens), `hidden` (0 tokens)
+A TypeScript stdio proxy that sits between your AI coding assistant and any upstream MCP server, giving you live control over which tools the model sees — without restarting your IDE or editing config files manually.
 
 ```
-Claude Code ←── stdio ──→ mcp-focus proxy ←── stdio ──→ upstream MCP server
-                                │
-                        ~/.claude/.mcp-focus.json   ← fs.watch (hot reload)
+Claude Code / Cursor / Codex CLI / Antigravity
+        ↓ stdio
+   mcp-focus proxy          ← filters tools, hot-reloads on config change
+        ↓ stdio
+  upstream MCP server       ← filesystem, tavily, your custom server, etc.
 ```
 
 ---
 
-## Prerequisites
+## Table of Contents
 
-- Node.js 18+
-- Claude Code (or any MCP-compatible client)
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+  - [.mcp-focus.json](#mcp-focusjson)
+  - [Claude Code](#claude-code)
+  - [Cursor](#cursor)
+  - [Codex CLI](#codex-cli-openai)
+  - [Antigravity](#antigravity-google)
+- [TUI Usage](#tui-usage)
+- [Access Logging](#access-logging)
+- [Slash Command](#claude-code-slash-command)
+- [Scope: Global vs Project](#scope-global-vs-project)
+- [Command Reference](#command-reference)
+- [How It Works](#how-it-works)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Support](#support)
+- [License](#license)
 
 ---
 
-## Install
+## Features
 
-### Option A — npm global install (once published)
+- **Hot reload** — change `.mcp-focus.json`, the model sees updated tools within ~300ms
+- **Three-state tool visibility** — `enabled` ✅ (full), `disabled` ❌ (stub, ~20 tokens), `hidden` 📌 (0 tokens)
+- **Interactive TUI** — keyboard-driven panel: search, bulk ops, per-tool toggles
+- **Access logging** — structured JSONL audit trail of every tool call (args opt-in)
+- **Setup wizard** — auto-detects unregistered servers and patches your config with consent
+- **Multi-client** — works with Claude Code, Cursor, Codex CLI, Antigravity, or any MCP-compatible client
+
+---
+
+## Installation
+
+### From GitHub (recommended — works today)
 
 ```bash
-npm install -g mcp-focus
+npm install -g github:quasarmagnus/mcp-focus
 mcp-focus --version
 ```
 
-### Option B — Clone and build
+This clones the repo, builds TypeScript via the `prepare` script, and links the `mcp-focus` binary globally.
 
-```bash
-git clone https://github.com/quasarmagnus/mcp-focus
-cd mcp-focus
-npm install        # runs the TypeScript build automatically via the prepare script
-npm link           # makes `mcp-focus` available globally
-mcp-focus --version
-```
-
-**Windows** — after `npm link`, refresh PATH in your current shell:
-
+**Windows** — if the command isn't found after install, refresh PATH in your shell:
 ```powershell
 $env:PATH = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 ```
 
+### Clone and build
+
+```bash
+git clone https://github.com/quasarmagnus/mcp-focus
+cd mcp-focus
+npm install   # builds automatically via the prepare script
+npm link      # makes mcp-focus available globally
+```
+
 ---
 
-## Configure
+## Quick Start
 
-### 1. Create `~/.claude/.mcp-focus.json`
+1. Install mcp-focus (above)
+2. Run `mcp-focus` — the setup wizard detects servers already in your IDE config and offers to register and proxy them automatically
+3. `/reconnect` in your IDE — mcp-focus is now sitting between your client and each server
+4. Run `mcp-focus` again to open the TUI and toggle tools live
 
-This file owns your server registrations, per-tool states, and settings. Start with empty `tools: {}` — the proxy auto-populates them on first connection.
+---
+
+## Configuration
+
+### `.mcp-focus.json`
+
+mcp-focus reads from `~/.claude/.mcp-focus.json` by default (global scope). Each server entry points to the upstream command. The `tools` object starts empty — the proxy auto-populates it on first connection.
 
 ```json
 {
   "version": "1.0",
+  "settings": {
+    "logging": false,
+    "logArgs": false
+  },
   "servers": {
     "my-server": {
       "command": "node",
-      "args": ["/path/to/my-server/dist/index.js"],
+      "args": ["/absolute/path/to/my-server/dist/index.js"],
       "tools": {}
     }
   }
@@ -70,83 +113,113 @@ This file owns your server registrations, per-tool states, and settings. Start w
 ```
 
 **Windows paths** use double backslashes:
-
 ```json
 "args": ["C:\\Users\\you\\projects\\my-server\\dist\\index.js"]
 ```
 
-For **project-scoped** config (isolated per repo), use `./.mcp-focus.json` in your project root and pass `--scope project` to the proxy command.
+> **Note:** The `tools` object is populated automatically — you don't need to list tool names manually.
 
-### 2. Wire into Claude Code
+---
 
-Claude Code's MCP config lives in `~/.claude.json`. Replace each direct server entry with an mcp-focus proxy entry:
+### Claude Code
 
-**Before:**
-```json
-"my-server": {
-  "type": "stdio",
-  "command": "node",
-  "args": ["/path/to/my-server/dist/index.js"]
-}
-```
+Edit `~/.claude.json` → `mcpServers`. Replace each direct server entry with the mcp-focus proxy:
 
-**After:**
 ```json
 "my-server": {
   "type": "stdio",
   "command": "node",
   "args": [
-    "/path/to/mcp-focus/dist/index.js",
+    "/absolute/path/to/mcp-focus/dist/index.js",
     "proxy",
     "--server", "my-server",
-    "--config", "/Users/you/.claude/.mcp-focus.json"
+    "--config", "/absolute/path/to/.mcp-focus.json"
   ],
   "env": {
-    "MY_SERVER_API_KEY": "your-key-here"
+    "MY_API_KEY": "your-key-here"
   }
 }
 ```
 
-**Windows:**
-```json
-"args": [
-  "C:\\Users\\you\\projects\\mcp-focus\\dist\\index.js",
-  "proxy",
-  "--server", "my-server",
-  "--config", "C:\\Users\\you\\.claude\\.mcp-focus.json"
-]
-```
-
-### 3. Setup wizard (alternative to manual config)
-
-Run `mcp-focus` after adding a server directly to `~/.claude.json`. The setup wizard detects unregistered servers and offers to:
-- Register them in `.mcp-focus.json`
-- Automatically patch `~/.claude.json` (with a backup to `~/.claude.json.bak`)
-
-This is the fastest path for onboarding an existing server.
-
-### 4. Reconnect
-
-After wiring the proxy, run `/reconnect` in Claude Code (or restart). mcp-focus auto-populates `.mcp-focus.json` with all tool names set to `enabled` the first time Claude calls `tools/list`.
+Run `/reconnect` in Claude Code after saving.
 
 ---
 
-## Use the TUI
+### Cursor
 
-```bash
-mcp-focus                    # server picker
-mcp-focus my-server          # jump straight to a server's tool list
-mcp-focus --scope project    # use project-level .mcp-focus.json
+Config file: `.cursor/mcp.json` in your project root. Uses the same `mcpServers` format:
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/absolute/path/to/mcp-focus/dist/index.js",
+        "proxy",
+        "--server", "my-server",
+        "--config", "/absolute/path/to/.mcp-focus.json"
+      ],
+      "env": {}
+    }
+  }
+}
 ```
 
-From inside Claude Code (requires a real TTY):
+---
 
+### Codex CLI (OpenAI)
+
+Config file: `~/.codex/config.toml`
+
+```toml
+[mcp_servers.my-server]
+command = "node /absolute/path/to/mcp-focus/dist/index.js proxy --server my-server --config /absolute/path/to/.mcp-focus.json"
+```
+
+---
+
+### Antigravity (Google)
+
+In the Antigravity IDE: **Agent session → … → MCP Servers → Manage MCP Servers → View raw config**
+
+Add to the `mcpServers` object:
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/mcp-focus/dist/index.js",
+        "proxy",
+        "--server", "my-server",
+        "--config", "/absolute/path/to/.mcp-focus.json"
+      ],
+      "env": {}
+    }
+  }
+}
+```
+
+Click **Refresh** after saving to activate.
+
+---
+
+## TUI Usage
+
+```bash
+mcp-focus                  # open server picker
+mcp-focus my-server        # jump straight to a server's tool list
+mcp-focus --scope project  # use project-level .mcp-focus.json
+```
+
+From inside your IDE terminal:
 ```
 ! mcp-focus
 ! mcp-focus my-server
 ```
-
-Or use the slash command `/mcp-focus` if installed (see below).
 
 ### Main menu
 
@@ -167,71 +240,67 @@ Or use the slash command `/mcp-focus` if installed (see below).
 
 | Key | Action |
 |-----|--------|
-| `↑` / `↓` | Navigate tools |
+| `↑` / `↓` | Navigate |
 | `Space` | Cycle state: enabled → disabled → hidden |
-| `1` | Enable all (or all matching filter) |
-| `2` | Disable all (or all matching filter) |
-| `3` | Hide all (or all matching filter) |
+| `1` | Enable all (or all matching current filter) |
+| `2` | Disable all (or all matching current filter) |
+| `3` | Hide all (or all matching current filter) |
 | Type any letter | Filter tools by name |
+| `Backspace` | Delete last filter character |
 | `Esc` | Clear filter / go back |
 | `←` | Go back to server picker |
 | `Enter` | Save and exit |
 | `Ctrl+C` | Cancel without saving |
 
-Changes hot-reload in the proxy within ~300ms. No Claude Code restart needed.
+Changes hot-reload in the proxy within ~300ms. No IDE restart needed.
 
 ### Tool states
 
-| State | Tokens used | Behaviour |
-|-------|-------------|-----------|
-| `enabled` ✅ | Full schema | Tool works normally |
-| `disabled` ❌ | ~20 tokens | Stub shown to Claude, calls blocked with an error message |
-| `hidden` 📌 | 0 tokens | Tool completely invisible to Claude |
+| State | Icon | Tokens | Behaviour |
+|-------|------|--------|-----------|
+| `enabled` | ✅ | Full schema | Works normally |
+| `disabled` | ❌ | ~20 | Stub shown to model; calls blocked with a descriptive error |
+| `hidden` | 📌 | 0 | Completely invisible to the model |
 
 ---
 
-## Access logging
+## Access Logging
 
-Enable structured audit logs via **Settings** in the TUI main menu, or permanently via `~/.claude/.mcp-focus.json`:
+Enable via **Settings** in the TUI, or directly in `.mcp-focus.json`:
 
 ```json
-{
-  "version": "1.0",
-  "settings": {
-    "logging": true,
-    "logArgs": false
-  },
-  "servers": { ... }
+"settings": {
+  "logging": true,
+  "logArgs": false
 }
 ```
 
 Logs are written to `~/.claude/mcp-focus-logs/{server}-YYYY-MM-DD.jsonl` (one file per server per day):
 
 ```jsonl
-{"ts":"2026-05-13T10:00:00Z","event":"proxy_start","server":"filesystem"}
-{"ts":"2026-05-13T10:00:01Z","event":"tools_list","server":"filesystem","upstream":14,"returned":12,"hidden":1,"disabled":1}
-{"ts":"2026-05-13T10:00:02Z","event":"tools_call","server":"filesystem","tool":"read_file","status":"ok","ms":43}
-{"ts":"2026-05-13T10:00:03Z","event":"tools_call","server":"filesystem","tool":"write_file","status":"blocked","ms":0,"reason":"disabled"}
+{"ts":"2026-05-14T10:00:00Z","event":"proxy_start","server":"filesystem"}
+{"ts":"2026-05-14T10:00:01Z","event":"tools_list","server":"filesystem","upstream":14,"returned":12,"hidden":1,"disabled":1}
+{"ts":"2026-05-14T10:00:02Z","event":"tools_call","server":"filesystem","tool":"read_file","status":"ok","ms":43}
+{"ts":"2026-05-14T10:00:03Z","event":"tools_call","server":"filesystem","tool":"write_file","status":"blocked","ms":0,"reason":"disabled"}
 ```
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `logging` | `false` | Enable/disable access logging |
-| `logArgs` | `false` | Include tool arguments in logs (opt-in — may contain file paths, API keys, search queries) |
+| `logging` | `false` | Enable/disable logging |
+| `logArgs` | `false` | Include tool arguments in logs (may contain file paths, queries, API keys — opt-in) |
 
-**CLI override** — force argument logging for a single proxy session without changing the config:
-
+**CLI override** — force argument logging for one proxy session without changing config:
 ```bash
-node dist/index.js proxy --server my-server --config ~/.claude/.mcp-focus.json --log-args
+mcp-focus proxy --server my-server --config /path/to/.mcp-focus.json --log-args
 ```
 
-Logs are append-only JSONL. Changes take effect after the next proxy restart (`/reconnect` in Claude Code).
+Changes take effect after the next `/reconnect`.
 
 ---
 
-## Claude Code slash command (optional)
+## Claude Code Slash Command
 
-Copy the command file so `/mcp-focus` works inside Claude Code:
+Copy the command file to make `/mcp-focus` available inside Claude Code:
 
 **macOS / Linux:**
 ```bash
@@ -245,11 +314,11 @@ New-Item -ItemType Directory -Force "$env:USERPROFILE\.claude\commands"
 Copy-Item "C:\path\to\mcp-focus\commands\mcp-focus.md" "$env:USERPROFILE\.claude\commands\"
 ```
 
-Then type `/mcp-focus` (or `/mcp-focus my-server`) inside any Claude Code session.
+Then type `/mcp-focus` or `/mcp-focus my-server` inside any Claude Code session.
 
 ---
 
-## Scope: project vs global
+## Scope: Global vs Project
 
 | Flag | Config file | Use case |
 |------|-------------|----------|
@@ -257,20 +326,20 @@ Then type `/mcp-focus` (or `/mcp-focus my-server`) inside any Claude Code sessio
 | `--scope project` | `./.mcp-focus.json` in cwd | Per-repo tool sets |
 | `--config <path>` | Explicit path | Override both |
 
-Works identically with Cursor (`.cursor/mcp.json`) and any other MCP-compatible client — only the wrapping config file path differs.
-
 ---
 
-## Command reference
+## Command Reference
 
 ```
-mcp-focus [server]            Launch TUI (server picker or jump to named server)
-  --config <path>             Explicit .mcp-focus.json path
+mcp-focus [server]
+  Launch the TUI. Omit server for the picker; pass a server name to jump straight to it.
+  --config <path>             Path to .mcp-focus.json
   --scope <global|project>    Config scope (default: global)
 
-mcp-focus proxy               Run as MCP stdio proxy (used in .claude.json)
+mcp-focus proxy
+  Run as an MCP stdio proxy. Used in your client's MCP config.
   --server <name>             Server name from .mcp-focus.json  [required]
-  --config <path>             Explicit .mcp-focus.json path
+  --config <path>             Path to .mcp-focus.json
   --scope <global|project>    Config scope (default: global)
   --log-args                  Log tool arguments in access logs
   --debug                     Enable debug logging to stderr
@@ -278,13 +347,45 @@ mcp-focus proxy               Run as MCP stdio proxy (used in .claude.json)
 
 ---
 
-## How it works
+## How It Works
 
-mcp-focus is a **pass-through MCP server**. For each upstream server you register, the proxy:
+mcp-focus is a **pass-through MCP server**. For each upstream server you register:
 
-1. Spawns the upstream server as a child process
-2. On `tools/list` — fetches the upstream list, filters by per-tool state, auto-registers new tools
-3. On `tools/call` — blocks disabled/hidden tools with a clear error; forwards everything else
-4. Watches `.mcp-focus.json` for changes and sends `notifications/tools/list_changed` to Claude within ~300ms
+1. Spawns the upstream as a child process over stdio
+2. On `tools/list` — fetches upstream tools, filters by per-tool state, auto-registers new tools in `.mcp-focus.json`
+3. On `tools/call` — blocks disabled/hidden tools with a descriptive error; forwards everything else upstream
+4. Watches `.mcp-focus.json` with `fs.watch` and sends `notifications/tools/list_changed` within ~300ms so your IDE refreshes without a restart
 
-The `.mcp-focus.json` config file is the single source of truth. Edit it directly, use the TUI, or write tooling on top — the proxy picks up any change automatically.
+`.mcp-focus.json` is the single source of truth. Edit it directly, use the TUI, or build tooling on top — the proxy picks up any change automatically.
+
+---
+
+## Roadmap
+
+- [ ] Smoke test suite
+- [ ] npm registry publish (`npm install -g mcp-focus`)
+- [ ] Per-tool argument schema filtering
+- [ ] Log viewer in the TUI
+
+---
+
+## Contributing
+
+Pull requests are welcome. For significant changes, open an issue first to discuss the approach.
+
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Commit and push
+4. Open a pull request
+
+---
+
+## Support
+
+Open an issue: [github.com/quasarmagnus/mcp-focus/issues](https://github.com/quasarmagnus/mcp-focus/issues)
+
+---
+
+## License
+
+[MIT](LICENSE) © quasarmagnus
