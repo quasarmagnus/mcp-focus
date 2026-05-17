@@ -45,7 +45,7 @@ Claude Code / Cursor / Codex CLI / Antigravity
 ## Features
 
 - **Hot reload** — change `.mcp-focus.json`, the model sees updated tools within ~300ms
-- **Three-state tool visibility** — `enabled` ✅ (full schema), `stub` 📌 (visible but blocked, ~20 tokens), `hidden` ❌ (invisible, 0 tokens)
+- **Three-state tool visibility** — `enabled` ✅ (full schema), `stub` 📌 (model sees the tool and can reason about it, but calls are blocked), `hidden` ❌ (invisible, 0 tokens)
 - **Interactive TUI** — keyboard-driven panel: search, bulk ops, per-tool toggles
 - **Access logging** — structured JSONL audit trail of every tool call (args opt-in)
 - **Setup wizard** — auto-detects unregistered servers and patches your config with consent
@@ -259,8 +259,8 @@ Changes hot-reload in the proxy within ~300ms. No IDE restart needed.
 | State | Icon | Tokens | Behaviour |
 |-------|------|--------|-----------|
 | `enabled` | ✅ | Full schema | Works normally |
-| `stub` | 📌 | ~20 | Visible to the model; calls blocked with a descriptive error |
-| `hidden` | ❌ | 0 | Completely invisible to the model |
+| `stub` | 📌 | ~20 | The model sees the tool name and description, knows it exists, and can tell you it's unavailable — but any call is blocked. Use this when you want the model to reason about a capability without being able to invoke it. |
+| `hidden` | ❌ | 0 | Completely invisible to the model — no tokens, no awareness |
 
 ---
 
