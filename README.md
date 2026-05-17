@@ -45,7 +45,7 @@ Claude Code / Cursor / Codex CLI / Antigravity
 ## Features
 
 - **Hot reload** — change `.mcp-focus.json`, the model sees updated tools within ~300ms
-- **Three-state tool visibility** — `enabled` ✅ (full), `disabled` ❌ (stub, ~20 tokens), `hidden` 📌 (0 tokens)
+- **Three-state tool visibility** — `enabled` ✅ (full schema), `stub` 📌 (visible but blocked, ~20 tokens), `hidden` ❌ (invisible, 0 tokens)
 - **Interactive TUI** — keyboard-driven panel: search, bulk ops, per-tool toggles
 - **Access logging** — structured JSONL audit trail of every tool call (args opt-in)
 - **Setup wizard** — auto-detects unregistered servers and patches your config with consent
@@ -226,10 +226,10 @@ From inside your IDE terminal:
 ```
   mcp-focus › List of MCP Servers
 
-  ❯ All MCP Servers  (16 tools)
+  ❯ All MCP Servers  (16 tools)  [📌 1  ❌ 1]
 
   Configure Individual MCP:
-    filesystem  (14 tools)
+    filesystem  (14 tools)  [📌 1  ❌ 1]
     tavily  (2 tools)
 
     ⚙  Settings
@@ -241,9 +241,9 @@ From inside your IDE terminal:
 | Key | Action |
 |-----|--------|
 | `↑` / `↓` | Navigate |
-| `Space` | Cycle state: enabled → disabled → hidden |
+| `Space` | Cycle state: enabled → stub → hidden |
 | `1` | Enable all (or all matching current filter) |
-| `2` | Disable all (or all matching current filter) |
+| `2` | Stub all (or all matching current filter) |
 | `3` | Hide all (or all matching current filter) |
 | Type any letter | Filter tools by name |
 | `Backspace` | Delete last filter character |
@@ -259,8 +259,8 @@ Changes hot-reload in the proxy within ~300ms. No IDE restart needed.
 | State | Icon | Tokens | Behaviour |
 |-------|------|--------|-----------|
 | `enabled` | ✅ | Full schema | Works normally |
-| `disabled` | ❌ | ~20 | Stub shown to model; calls blocked with a descriptive error |
-| `hidden` | 📌 | 0 | Completely invisible to the model |
+| `stub` | 📌 | ~20 | Visible to the model; calls blocked with a descriptive error |
+| `hidden` | ❌ | 0 | Completely invisible to the model |
 
 ---
 
@@ -353,7 +353,7 @@ mcp-focus is a **pass-through MCP server**. For each upstream server you registe
 
 1. Spawns the upstream as a child process over stdio
 2. On `tools/list` — fetches upstream tools, filters by per-tool state, auto-registers new tools in `.mcp-focus.json`
-3. On `tools/call` — blocks disabled/hidden tools with a descriptive error; forwards everything else upstream
+3. On `tools/call` — blocks stub/hidden tool calls with a descriptive error; forwards everything else upstream
 4. Watches `.mcp-focus.json` with `fs.watch` and sends `notifications/tools/list_changed` within ~300ms so your IDE refreshes without a restart
 
 `.mcp-focus.json` is the single source of truth. Edit it directly, use the TUI, or build tooling on top — the proxy picks up any change automatically.
