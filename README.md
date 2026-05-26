@@ -1,8 +1,16 @@
-# mcp-focus
+```
+╔══════════════════════════════════════════════════════════════════╗
+║                                                                  ║
+║                       mcp-focus v0.1.0                          ║
+║         MCP stdio proxy · hot-reload · interactive TUI          ║
+║                                                                  ║
+╚══════════════════════════════════════════════════════════════════╝
+```
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
-[![GitHub issues](https://img.shields.io/github/issues/quasarmagnus/mcp-focus)](https://github.com/quasarmagnus/mcp-focus/issues)
+[![npm version](https://img.shields.io/npm/v/mcp-focus?style=flat-square&color=cb3837)](https://www.npmjs.com/package/mcp-focus)
+[![license](https://img.shields.io/npm/l/mcp-focus?style=flat-square)](LICENSE)
+[![node](https://img.shields.io/node/v/mcp-focus?style=flat-square&label=node)](https://nodejs.org)
+[![GitHub issues](https://img.shields.io/github/issues/quasarmagnus/mcp-focus?style=flat-square)](https://github.com/quasarmagnus/mcp-focus/issues)
 
 > **Tags:** `mcp` `mcp-proxy` `model-context-protocol` `tool-filtering` `claude-code` `cursor` `codex` `antigravity` `tui` `hot-reload`
 
@@ -55,27 +63,26 @@ Claude Code / Cursor / Codex CLI / Antigravity
 
 ## Installation
 
-### From GitHub (recommended — works today)
+```bash
+npm install -g mcp-focus
+```
 
+> **Windows users:** if `mcp-focus` isn't found after install, refresh PATH in your shell:
+> ```powershell
+> $env:PATH = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+> ```
+
+**Or install the latest unreleased version directly from GitHub:**
 ```bash
 npm install -g github:quasarmagnus/mcp-focus
-mcp-focus --version
 ```
 
-This clones the repo, builds TypeScript via the `prepare` script, and links the `mcp-focus` binary globally.
-
-**Windows** — if the command isn't found after install, refresh PATH in your shell:
-```powershell
-$env:PATH = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-```
-
-### Clone and build
-
+**Or clone and link locally:**
 ```bash
 git clone https://github.com/quasarmagnus/mcp-focus
 cd mcp-focus
-npm install   # builds automatically via the prepare script
-npm link      # makes mcp-focus available globally
+npm install
+npm link
 ```
 
 ---
@@ -363,7 +370,6 @@ mcp-focus is a **pass-through MCP server**. For each upstream server you registe
 ## Roadmap
 
 - [ ] Smoke test suite
-- [ ] npm registry publish (`npm install -g mcp-focus`)
 - [ ] Per-tool argument schema filtering
 - [ ] Log viewer in the TUI
 
